@@ -40,17 +40,16 @@ exports.scheduleNotification = functions.firestore
 
         // 데이터 생성 다음날부터 지정 시간에 푸시 알림 설정
         // 서버 시간 기준으로 현재 시간을 가져옴
-        const serverDate = new Date();
+        const serverDate = new Date();  // UTC
 
         // 한국 시간으로 변환
-        const koreaOffset = 9 * 60; // 한국은 UTC+9
-        const utcDate = new Date(serverDate.getTime() + serverDate.getTimezoneOffset() * 60000);
-        const koreaDate = new Date(utcDate.getTime() + koreaOffset * 60000);
+        const koreaOffset = 9 * 60;  // 한국은 UTC+9
+        const koreaDate = new Date(serverDate.getTime() + (koreaOffset * 60000));
 
         const tomorrow = new Date(koreaDate);
         tomorrow.setDate(tomorrow.getDate() + 1);
         tomorrow.setHours(newValue.notificationTime, 0, 0, 0);
-
+        
         const scheduledNotifications = [];
 
         // tomorrow부터 deadline까지 매일 반복
@@ -68,7 +67,7 @@ exports.scheduleNotification = functions.firestore
                 userId: userId,
                 docId: docId,
                 message: message,
-                scheduledTime: new Date(currentDate),
+                scheduledTime: new Date(currentDate - (koreaOffset * 60000)),
             });
         }
 
@@ -92,20 +91,18 @@ exports.sendScheduledNotifications = functions.pubsub
     .onRun(async (context) => {
         // 현재 시각의 정각 계산
         // 서버 시간 기준으로 현재 시간을 가져옴
-        const serverDate = new Date();
+        const serverDate = new Date();  // UTC
 
         // 한국 시간으로 변환
-        const koreaOffset = 9 * 60; // 한국은 UTC+9
-        const utcDate = new Date(serverDate.getTime() + serverDate.getTimezoneOffset() * 60000);
-        const koreaDate = new Date(utcDate.getTime() + koreaOffset * 60000);
+        const koreaOffset = 9 * 60;  // 한국은 UTC+9
+        const koreaDate = new Date(serverDate.getTime() + (koreaOffset * 60000));
 
         const now = new Date(koreaDate);
         now.setMinutes(0, 0, 0);
-
         
         // Firestore Timestamp로 변환
         const currentHourTimestamp = admin.firestore.Timestamp.fromDate(now);
-
+        console.log(`배치 실행 시간: ${currentHourTimestamp}`);
 
         const query = admin.firestore()
             .collection('scheduledNotifications')
@@ -123,7 +120,7 @@ exports.sendScheduledNotifications = functions.pubsub
                 await admin.messaging().send(message);
                 return doc.ref.delete();
             } catch (error) {
-                console.error('Error sending message:', error);
+                console.error('배치 실행 에러:', error);
                 
                 if (retryCount < 1) {
                     // 첫 번째 실패: 재시도 횟수 증가
@@ -137,14 +134,14 @@ exports.sendScheduledNotifications = functions.pubsub
 
         await Promise.all(sendPromises);
 
-        console.log(`Processed notifications for ${now.toISOString()}`);
+        console.log(`배치 완료 시간: ${now.toISOString()}`);
         return null;
     });
 
 
 // 스케줄이 삭제될 때, 남아있는 배치 삭제
 exports.deleteScheduleNotifications = functions.firestore
-    .document('users/{userId}/Schedules/{docId}')
+    .document('Users/{userId}/Schedules/{docId}')
     .onDelete(async (change, context) => {
         const { userId, docId } = context.params;
 
@@ -163,6 +160,6 @@ exports.deleteScheduleNotifications = functions.firestore
 
         await batch.commit();
 
-        console.log(`Deleted ${snapshot.size} notifications for schedule ${docId} of user ${userId}`);
+        console.log(`일정 삭제 ${snapshot.size} notifications for Schedules ${docId} of User ${userId}`);
         return null;
     });
