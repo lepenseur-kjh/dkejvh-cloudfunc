@@ -37,28 +37,38 @@ exports.scheduleNotification = functions.firestore
 
         // deadline을 Date 객체로 변환
         const deadline = newValue.deadline.toDate();
+        deadline.setHours(23, 59, 59, 59);
+        console.log(`deadline: ${deadline.toLocaleString()}`)
 
         // 데이터 생성 다음날부터 지정 시간에 푸시 알림 설정
         // 서버 시간 기준으로 현재 시간을 가져옴
         const serverDate = new Date();  // UTC
+        console.log(`serverDate: ${serverDate.toLocaleString()}`)
 
         // 한국 시간으로 변환
         const koreaOffset = 9 * 60;  // 한국은 UTC+9
         const koreaDate = new Date(serverDate.getTime() + (koreaOffset * 60000));
 
-        const tomorrow = new Date(koreaDate);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(newValue.notificationTime, 0, 0, 0);
+        // 시작 날짜 계산
+        let startDate = new Date(koreaDate);
+        startDate.setHours(newValue.notificationTime, 0, 0, 0);
+
+        // 현재 시간이 알람 시간보다 늦으면, 다음날부터 시작
+        if (koreaDate.getHours() >= newValue.notificationTime) {
+            startDate.setDate(startDate.getDate() + 1);
+        }
+        console.log(`startDate: ${startDate.toLocaleString()}`)
         
         const scheduledNotifications = [];
 
-        // tomorrow부터 deadline까지 매일 반복
-        for (let currentDate = new Date(tomorrow); currentDate <= deadline; currentDate.setDate(currentDate.getDate() + 1)) {
+        // startDate부터 deadline까지 매일 반복
+        for (let currentDate = new Date(startDate); currentDate <= deadline;) {
+            console.log(`배치 생성 currentDate: ${currentDate.toLocaleString()}`)
             const message = {
                 data: {
                     title: "일정 관리 안내",
                     body: `'${newValue.content}' 일정을 잊지 마세요!`,
-                    scheduledDate: currentDate.toISOString(),
+                    scheduledDate: new Date(currentDate - (koreaOffset * 60000)),
                 },
                 token: userFcmToken,  // 사용자의 FCM 토큰
             };
@@ -69,6 +79,7 @@ exports.scheduleNotification = functions.firestore
                 message: message,
                 scheduledTime: new Date(currentDate - (koreaOffset * 60000)),
             });
+            currentDate.setDate(currentDate.getDate() + 1);
         }
 
         // 배치 작업으로 모든 예약 알림 추가
@@ -87,26 +98,24 @@ exports.scheduleNotification = functions.firestore
 // 예약된 알림 전송 함수 (Pub/Sub 트리거 사용)
 // 정각에 푸시 알림 발송
 exports.sendScheduledNotifications = functions.pubsub
-    .schedule('every 1 hours')
+    .schedule('0 * * * *')  // 1, 2, 3, ...시
+    .timeZone('Asia/Seoul')  // 시간대를 Asia/Seoul로 설정
     .onRun(async (context) => {
         // 현재 시각의 정각 계산
         // 서버 시간 기준으로 현재 시간을 가져옴
-        const serverDate = new Date();  // UTC
-
         // 한국 시간으로 변환
+        const now = new Date();
         const koreaOffset = 9 * 60;  // 한국은 UTC+9
-        const koreaDate = new Date(serverDate.getTime() + (koreaOffset * 60000));
+        console.log(`배치 실행 시간 now: ${now.toLocaleString()}`);
+        console.log(`배치 실행 시간 now(kst): ${now.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`);
 
-        const now = new Date(koreaDate);
         now.setMinutes(0, 0, 0);
-        
-        // Firestore Timestamp로 변환
-        const currentHourTimestamp = admin.firestore.Timestamp.fromDate(now);
-        console.log(`배치 실행 시간: ${currentHourTimestamp}`);
+        const standard = new Date(now + (koreaOffset * 60000));
+        console.log(`배치 기준 시간 standard: ${standard.toLocaleString()}`);
 
         const query = admin.firestore()
             .collection('scheduledNotifications')
-            .where('scheduledTime', '==', currentHourTimestamp);
+            .where('scheduledTime', '==', standard);
 
         const snapshot = await query.get();
         
@@ -133,8 +142,8 @@ exports.sendScheduledNotifications = functions.pubsub
         });
 
         await Promise.all(sendPromises);
-
-        console.log(`배치 완료 시간: ${now.toISOString()}`);
+        const end = new Date();
+        console.log(`배치 완료 시간: ${end.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`);
         return null;
     });
 
