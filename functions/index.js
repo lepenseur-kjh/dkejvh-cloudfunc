@@ -118,7 +118,7 @@ exports.sendScheduledNotifications = functions.pubsub
         console.log(`배치 실행 시간 now(kst): ${now.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`);
 
         now.setMinutes(0, 0, 0);
-        const koreaDate = new Date(now + (koreaOffset * 60000));
+        const koreaDate = new Date(now.getTime() + (koreaOffset * 60000));
         
         const standard = formatDateToYYYYMMDDHHMM(koreaDate);
         console.log(`배치 기준 시간 standard: ${standard}`);
