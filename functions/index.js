@@ -134,7 +134,7 @@ exports.sendScheduledNotifications = functions.pubsub
         // 두 번째부터는 삭제
         const sendPromises = snapshot.docs.map(async (doc) => {
             const { message, retryCount = 0 } = doc.data();
-            console.log(`푸시 알람 발송: ${message}`);
+            console.log(`푸시 알람 발송: ${JSON.stringify(message)}`);
             try {
                 await admin.messaging().send(message);
                 return doc.ref.delete();
