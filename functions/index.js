@@ -22,6 +22,15 @@ admin.initializeApp();
 //   response.send("Hello from Firebase!");
 // });
 
+const formatDateToYYYYMMDDHHMM = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // 월은 0부터 시작하므로 +1
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0'); // 24시간 형식
+
+    return `${year}${month}${day}${hours}00`;
+};
+
 // FCM 메시지 예약 함수
 exports.scheduleNotification = functions.firestore
     .document('Users/{userId}/Schedules/{docId}')
@@ -65,10 +74,9 @@ exports.scheduleNotification = functions.firestore
         for (let currentDate = new Date(startDate); currentDate <= deadline;) {
             console.log(`배치 생성 currentDate: ${currentDate.toLocaleString()}`)
             const message = {
-                data: {
+                notification: {
                     title: "일정 관리 안내",
                     body: `'${newValue.content}' 일정을 잊지 마세요!`,
-                    scheduledDate: new Date(currentDate - (koreaOffset * 60000)),
                 },
                 token: userFcmToken,  // 사용자의 FCM 토큰
             };
@@ -77,7 +85,7 @@ exports.scheduleNotification = functions.firestore
                 userId: userId,
                 docId: docId,
                 message: message,
-                scheduledTime: new Date(currentDate - (koreaOffset * 60000)),
+                scheduledTime: formatDateToYYYYMMDDHHMM(currentDate),
             });
             currentDate.setDate(currentDate.getDate() + 1);
         }
@@ -110,8 +118,10 @@ exports.sendScheduledNotifications = functions.pubsub
         console.log(`배치 실행 시간 now(kst): ${now.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`);
 
         now.setMinutes(0, 0, 0);
-        const standard = new Date(now + (koreaOffset * 60000));
-        console.log(`배치 기준 시간 standard: ${standard.toLocaleString()}`);
+        const koreaDate = new Date(now + (koreaOffset * 60000));
+        
+        const standard = formatDateToYYYYMMDDHHMM(koreaDate);
+        console.log(`배치 기준 시간 standard: ${standard}`);
 
         const query = admin.firestore()
             .collection('scheduledNotifications')
