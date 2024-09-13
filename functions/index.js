@@ -31,6 +31,14 @@ const formatDateToYYYYMMDDHHMM = (date) => {
     return `${year}${month}${day}${hours}00`;
 };
 
+const formatDateToYYYYMMDD = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // 월은 0부터 시작하므로 +1
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}년 ${month}월 ${day}일`;
+};
+
 // FCM 메시지 예약 함수
 exports.scheduleNotification = functions.firestore
     .document('Users/{userId}/Schedules/{docId}')
@@ -76,7 +84,7 @@ exports.scheduleNotification = functions.firestore
             const message = {
                 notification: {
                     title: "일정 관리 안내",
-                    body: `'${newValue.content}' 일정을 잊지 마세요!`,
+                    body: `'${newValue.content}' \n알림 시각: ${newValue.notificationTime}시 \n마감일: ${formatDateToYYYYMMDD(deadline)}`,
                 },
                 token: userFcmToken,  // 사용자의 FCM 토큰
             };
